@@ -86,15 +86,15 @@ uploaded_file = st.file_uploader("📤 Sube tu archivo CSV", type=["csv"])
 if uploaded_file is not None:
 
     try:
-        # CORRECCIÓN APLICADA: on_bad_lines='skip' ignora las filas con errores de formato
         df = pd.read_csv(uploaded_file, dtype=str, sep=';', on_bad_lines='skip')
         st.success("Archivo cargado correctamente 🎉 (Las filas con errores de formato fueron omitidas)")
     except Exception as e:
         st.error(f"❌ Error al leer el CSV: {e}")
         st.stop()
 
+    # CORRECCIÓN APLICADA: Se cambió "Day" por "Día"
     columnas = [
-        "Day of tm_start_local_at",
+        "Día de tm_start_local_at",
         "Segmento Tiempo en Losa",
         "End State",
         "id_reservation_id",
@@ -114,17 +114,17 @@ if uploaded_file is not None:
     df = df[columnas].copy()
 
     # Convertir fecha
-    df["Day of tm_start_local_at"] = pd.to_datetime(
-        df["Day of tm_start_local_at"], errors="coerce"
+    df["Día de tm_start_local_at"] = pd.to_datetime(
+        df["Día de tm_start_local_at"], errors="coerce"
     ).dt.date
 
-    if df["Day of tm_start_local_at"].isna().all():
+    if df["Día de tm_start_local_at"].isna().all():
         st.error("❌ No hay fechas válidas.")
         st.stop()
 
     # Filtro de fechas
-    fecha_min = df["Day of tm_start_local_at"].min()
-    fecha_max = df["Day of tm_start_local_at"].max()
+    fecha_min = df["Día de tm_start_local_at"].min()
+    fecha_max = df["Día de tm_start_local_at"].max()
 
     fecha_desde, fecha_hasta = st.date_input(
         "📅 Selecciona rango de fechas:",
@@ -132,8 +132,8 @@ if uploaded_file is not None:
     )
 
     df = df[
-        (df["Day of tm_start_local_at"] >= fecha_desde) &
-        (df["Day of tm_start_local_at"] <= fecha_hasta)
+        (df["Día de tm_start_local_at"] >= fecha_desde) &
+        (df["Día de tm_start_local_at"] <= fecha_hasta)
     ]
 
     if df.empty:

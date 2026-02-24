@@ -324,7 +324,7 @@ if uploaded_file is not None:
     # ------------------------------
     st.markdown("---")
     st.subheader("📝 Plantillas para Zendesk")
-    st.write("Copia fácilmente los datos para crear los tickets. Solo se muestran usuarios con correos válidos y se excluyen dominios corporativos (@cabify.com).")
+    st.write("Copia los campos para crear los tickets. Solo se muestran usuarios con correos válidos y se excluyen dominios corporativos (@cabify.com).")
     
     df_zendesk = df_compensaciones[
         (df_compensaciones["Email Contactable"] == True) & 
@@ -346,15 +346,26 @@ if uploaded_file is not None:
 
         with st.expander("Ver plantillas de respuesta generadas", expanded=True):
             for idx, row in df_zendesk.iterrows():
-                st.write(f"**Ticket para:** {row['User Fullname']} ({row['Monto a Reembolsar']} CLP)")
+                st.write(f"### 🎫 Ticket para: {row['User Fullname']} ({row['Monto a Reembolsar']} CLP)")
                 
-                plantilla = f"""Motivo: Compensación por tu experiencia reciente con Cabify
+                # Crear dos columnas (1 para campos, 2 para el mensaje)
+                col1, col2 = st.columns([1, 1.5])
+                
+                with col1:
+                    st.write("**Datos del Ticket (Copia con el botón en la esquina superior derecha):**")
+                    campos_ticket = f"""Motivo: Compensación por tu experiencia reciente con Cabify
 Email Solicitante: {row['User Email']}
 Motivo de Contacto: Tag 060134 (Retraso en Reserva)
 Descuentos: Chile -> Disculpas
-Macro: Compensación proactiva espera en losa
+Macro: Compensación proactiva espera en losa"""
+                    # El texto plano sí usa st.code para aprovechar el botón de copiado rápido
+                    st.code(campos_ticket, language="text")
 
-Mensaje:
+                with col2:
+                    st.write("**Mensaje a enviar (Selecciona con el ratón y copia para mantener los enlaces activos):**")
+                    
+                    # Usamos Markdown para respetar los enlaces HTML y los saltos de línea
+                    mensaje_correo = f"""
 Hola {row['Primer Nombre']},
 
 En Cabify, valoramos tu tiempo y sabemos que cada minuto cuenta.
@@ -363,20 +374,23 @@ Queremos extender nuestras más sinceras disculpas porque en tu reciente viaje d
 
 Para recuperar tu confianza y asegurarnos de que tu próxima experiencia con Cabify sea impecable, hemos preparado un saldo de cortesía en tu cuenta.
 
-Si ya tienes una cuenta Cabify, respóndenos con el correo de tu cuenta para cargar el saldo.
+Si ya tienes una cuenta Cabify, respóndenos con el correo de tu cuenta para cargar el saldo.  
 Si aún no tienes una cuenta, crea tu cuenta en menos de 2 minutos y envíanos el correo que registraste.
 
-IPhone
-Android
+📱 [IPhone](https://apps.apple.com/es/app/cabify-viaja-como-te-mereces/id476087442)  
+📱 [Android](https://play.google.com/store/apps/details?id=com.cabify.rider&referrer=adjust_reftag%3Dczy6okB7ZfVXv%26utm_source%3DLandings%2B-Bot%25C3%25B3n%2Bdescarga%2Bapp%26utm_campaign%3DALL-ALL-RIDER-NA-NA-LAND-NA-DM-NA-PASAJEROSNEWLP-GLO-NA-NA-NA&pli=1)
 
 Una vez que nos confirmes o crees tu cuenta, cargaremos tu saldo en menos de 24 horas para que puedas usarlo en tu próximo viaje.
 
 Estamos atentos para asistirte con la carga del saldo. ¡Esperamos verte pronto a bordo, con la comodidad y rapidez que mereces!
 
-Saludos cordiales,
-El equipo de Cabify"""
+Saludos cordiales,  
+El equipo de Cabify
+"""
+                    # Mostramos el correo en un bloque estilizado para diferenciarlo
+                    st.info(mensaje_correo)
                 
-                st.code(plantilla, language="text")
+                st.markdown("---")
 
 else:
     st.info("Sube un archivo CSV para comenzar.")

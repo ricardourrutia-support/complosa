@@ -86,8 +86,9 @@ uploaded_file = st.file_uploader("📤 Sube tu archivo CSV", type=["csv"])
 if uploaded_file is not None:
 
     try:
-        df = pd.read_csv(uploaded_file, dtype=str, sep=';', quoting=3)
-        st.success("Archivo cargado correctamente 🎉")
+        # CORRECCIÓN APLICADA: on_bad_lines='skip' ignora las filas con errores de formato
+        df = pd.read_csv(uploaded_file, dtype=str, sep=';', on_bad_lines='skip')
+        st.success("Archivo cargado correctamente 🎉 (Las filas con errores de formato fueron omitidas)")
     except Exception as e:
         st.error(f"❌ Error al leer el CSV: {e}")
         st.stop()
@@ -295,3 +296,6 @@ if uploaded_file is not None:
         file_name="compensaciones_losa_cabify.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+else:
+    st.info("Sube un archivo CSV para comenzar.")

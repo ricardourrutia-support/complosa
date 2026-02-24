@@ -32,13 +32,44 @@ def calcular_compensacion(minutos):
         return 0
 
 # ------------------------------
+# Función para arreglar fechas en Español
+# ------------------------------
+MESES_ES_EN = {
+    'enero': 'january', 'febrero': 'february', 'marzo': 'march',
+    'abril': 'april', 'mayo': 'may', 'junio': 'june',
+    'julio': 'july', 'agosto': 'august', 'septiembre': 'september',
+    'octubre': 'october', 'noviembre': 'november', 'diciembre': 'december'
+}
+
+def convertir_fecha_espanol(fecha_str):
+    if pd.isna(fecha_str):
+        return pd.NaT
+    
+    # Convertir a minúsculas y limpiar texto
+    s = str(fecha_str).lower().strip()
+    
+    # Quitar los " de " (Ej: "8 de enero de 2026" -> "8 enero 2026")
+    s = s.replace(' de ', ' ')
+    
+    # Traducir el mes al inglés
+    for es, en in MESES_ES_EN.items():
+        if es in s:
+            s = s.replace(es, en)
+            break
+            
+    # Intentar convertir a fecha real
+    try:
+        return pd.to_datetime(s).date()
+    except:
+        return pd.NaT
+
+# ------------------------------
 # Funciones de Validación (Contactabilidad y Desempeño)
 # ------------------------------
 def es_email_contactable(email):
     if pd.isna(email): return False
     email = str(email).strip().lower()
     
-    # Si es el correo por defecto de la instrucción, NO es contactable
     if email == "11@gmail.com": return False
         
     patron = r"^[\w\.-]+@[\w\.-]+\.\w{2,}$"
@@ -52,9 +83,7 @@ def es_email_contactable(email):
 def es_email_cumplimiento(email):
     if pd.isna(email): return False
     email = str(email).strip().lower()
-    # Cumple si es el correo por defecto (agente siguió la regla)
     if email == "11@gmail.com": return True
-    # O si es un correo contactable válido
     return es_email_contactable(email)
 
 def es_telefono_contactable(telefono):
@@ -62,7 +91,6 @@ def es_telefono_contactable(telefono):
     telefono = str(telefono).strip().replace("+", "").replace(" ", "")
     
     if not telefono.isdigit(): return False
-    # Si es el número por defecto de la instrucción, NO es contactable
     if telefono == "111111111": return False
         
     if len(telefono) < 8 or len(telefono) > 15: return False
@@ -73,9 +101,7 @@ def es_telefono_contactable(telefono):
 def es_telefono_cumplimiento(telefono):
     if pd.isna(telefono): return False
     telefono_limpio = str(telefono).strip().replace("+", "").replace(" ", "")
-    # Cumple si es el número por defecto (agente siguió la regla)
     if telefono_limpio == "111111111": return True
-    # O si es un teléfono contactable válido
     return es_telefono_contactable(telefono)
 
 # ------------------------------
@@ -92,7 +118,6 @@ if uploaded_file is not None:
         st.error(f"❌ Error al leer el CSV: {e}")
         st.stop()
 
-    # CORRECCIÓN APLICADA: Se cambió "Day" por "Día"
     columnas = [
         "Día de tm_start_local_at",
         "Segmento Tiempo en Losa",
@@ -113,13 +138,11 @@ if uploaded_file is not None:
 
     df = df[columnas].copy()
 
-    # Convertir fecha
-    df["Día de tm_start_local_at"] = pd.to_datetime(
-        df["Día de tm_start_local_at"], errors="coerce"
-    ).dt.date
+    # CORRECCIÓN APLICADA: Convertir la fecha en texto español a fecha real
+    df["Día de tm_start_local_at"] = df["Día de tm_start_local_at"].apply(convertir_fecha_espanol)
 
     if df["Día de tm_start_local_at"].isna().all():
-        st.error("❌ No hay fechas válidas.")
+        st.error("❌ No hay fechas válidas. Revisa el formato de la columna 'Día de tm_start_local_at'.")
         st.stop()
 
     # Filtro de fechas

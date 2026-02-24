@@ -211,10 +211,10 @@ if uploaded_file is not None:
 
     st.subheader("📊 Registros procesados para Compensación")
     
-    cols_a_borrar = ["Email Contactable", "Email Cumplimiento", "Teléfono Contactable", "Teléfono Cumplimiento"]
-    df_compensaciones = df_compensaciones.drop(columns=cols_a_borrar)
+    cols_a_borrar = ["Email Cumplimiento", "Teléfono Contactable", "Teléfono Cumplimiento"]
+    df_compensaciones_vista = df_compensaciones.drop(columns=cols_a_borrar + ["Email Contactable"])
     
-    st.dataframe(df_compensaciones, use_container_width=True)
+    st.dataframe(df_compensaciones_vista, use_container_width=True)
 
     st.subheader("📈 Resumen de compensaciones")
     resumen = df_compensaciones["Monto a Reembolsar"].value_counts().sort_index()
@@ -230,8 +230,6 @@ if uploaded_file is not None:
     # ------------------------------
     # CREAR EXCEL ESTILIZADO CABIFY PARA COMPENSACIONES
     # ------------------------------
-    
-    # 1. Preparar el DataFrame exactamente como lo pidieron
     columnas_excel = [
         "Día de tm_start_local_at", 
         "Segmento Tiempo en Losa", 
@@ -246,8 +244,6 @@ if uploaded_file is not None:
         "Monto a Reembolsar"
     ]
     df_excel = df_compensaciones[columnas_excel].copy()
-    
-    # Renombrar "Día" por "Day" solo para el Excel
     df_excel = df_excel.rename(columns={"Día de tm_start_local_at": "Day of tm_start_local_at"})
 
     output = BytesIO()
@@ -268,7 +264,6 @@ if uploaded_file is not None:
     fill_9000 = PatternFill("solid", fgColor="E83C96")
     alt_fill = PatternFill("solid", fgColor="FAF8FE")
 
-    # Escribir el DataFrame filtrado al Excel
     for r in dataframe_to_rows(df_excel, index=False, header=True):
         ws.append(r)
 
@@ -280,7 +275,6 @@ if uploaded_file is not None:
 
     ws.auto_filter.ref = f"A1:{chr(64 + len(df_excel.columns))}1"
 
-    # Estilos dinámicos basados en la nueva estructura de df_excel
     col_idx_estado = df_excel.columns.get_loc("Estado Pago")
     col_idx_monto = df_excel.columns.get_loc("Monto a Reembolsar")
 
@@ -324,6 +318,65 @@ if uploaded_file is not None:
         file_name="compensaciones_losa_cabify.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+    # ------------------------------
+    # PLANTILLAS PARA ZENDESK
+    # ------------------------------
+    st.markdown("---")
+    st.subheader("📝 Plantillas para Zendesk")
+    st.write("Copia fácilmente los datos para crear los tickets. Solo se muestran usuarios con correos válidos y se excluyen dominios corporativos (@cabify.com).")
+    
+    df_zendesk = df_compensaciones[
+        (df_compensaciones["Email Contactable"] == True) & 
+        (~df_compensaciones["User Email"].str.lower().str.contains("@cabify.com", na=False))
+    ].copy()
+
+    if df_zendesk.empty:
+        st.info("No hay usuarios válidos para generar plantillas de Zendesk en este momento.")
+    else:
+        def obtener_primer_nombre(nombre_completo):
+            if pd.isna(nombre_completo):
+                return "Usuario"
+            partes = str(nombre_completo).strip().split()
+            if partes:
+                return partes[0].capitalize()
+            return "Usuario"
+
+        df_zendesk["Primer Nombre"] = df_zendesk["User Fullname"].apply(obtener_primer_nombre)
+
+        with st.expander("Ver plantillas de respuesta generadas", expanded=True):
+            for idx, row in df_zendesk.iterrows():
+                st.write(f"**Ticket para:** {row['User Fullname']} ({row['Monto a Reembolsar']} CLP)")
+                
+                plantilla = f"""Motivo: Compensación por tu experiencia reciente con Cabify
+Email Solicitante: {row['User Email']}
+Motivo de Contacto: Tag 060134 (Retraso en Reserva)
+Descuentos: Chile -> Disculpas
+Macro: Compensación proactiva espera en losa
+
+Mensaje:
+Hola {row['Primer Nombre']},
+
+En Cabify, valoramos tu tiempo y sabemos que cada minuto cuenta.
+
+Queremos extender nuestras más sinceras disculpas porque en tu reciente viaje desde el Aeropuerto experimentaste una espera inusualmente larga para abordar tu vehículo. Entendemos la frustración y lamentamos no haber cumplido con nuestro estándar de servicio ágil y cómodo.
+
+Para recuperar tu confianza y asegurarnos de que tu próxima experiencia con Cabify sea impecable, hemos preparado un saldo de cortesía en tu cuenta.
+
+Si ya tienes una cuenta Cabify, respóndenos con el correo de tu cuenta para cargar el saldo.
+Si aún no tienes una cuenta, crea tu cuenta en menos de 2 minutos y envíanos el correo que registraste.
+
+IPhone
+Android
+
+Una vez que nos confirmes o crees tu cuenta, cargaremos tu saldo en menos de 24 horas para que puedas usarlo en tu próximo viaje.
+
+Estamos atentos para asistirte con la carga del saldo. ¡Esperamos verte pronto a bordo, con la comodidad y rapidez que mereces!
+
+Saludos cordiales,
+El equipo de Cabify"""
+                
+                st.code(plantilla, language="text")
 
 else:
     st.info("Sube un archivo CSV para comenzar.")

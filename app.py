@@ -45,19 +45,14 @@ def convertir_fecha_espanol(fecha_str):
     if pd.isna(fecha_str):
         return pd.NaT
     
-    # Convertir a minúsculas y limpiar texto
     s = str(fecha_str).lower().strip()
-    
-    # Quitar los " de " (Ej: "8 de enero de 2026" -> "8 enero 2026")
     s = s.replace(' de ', ' ')
     
-    # Traducir el mes al inglés
     for es, en in MESES_ES_EN.items():
         if es in s:
             s = s.replace(es, en)
             break
             
-    # Intentar convertir a fecha real
     try:
         return pd.to_datetime(s).date()
     except:
@@ -69,15 +64,11 @@ def convertir_fecha_espanol(fecha_str):
 def es_email_contactable(email):
     if pd.isna(email): return False
     email = str(email).strip().lower()
-    
     if email == "11@gmail.com": return False
-        
     patron = r"^[\w\.-]+@[\w\.-]+\.\w{2,}$"
     if not re.match(patron, email): return False
-        
     parte_local = email.split('@')[0]
     if len(parte_local) < 2: return False
-        
     return True
 
 def es_email_cumplimiento(email):
@@ -89,13 +80,10 @@ def es_email_cumplimiento(email):
 def es_telefono_contactable(telefono):
     if pd.isna(telefono): return False
     telefono = str(telefono).strip().replace("+", "").replace(" ", "")
-    
     if not telefono.isdigit(): return False
     if telefono == "111111111": return False
-        
     if len(telefono) < 8 or len(telefono) > 15: return False
     if len(set(telefono)) == 1: return False
-        
     return True
 
 def es_telefono_cumplimiento(telefono):
@@ -138,7 +126,7 @@ if uploaded_file is not None:
 
     df = df[columnas].copy()
 
-    # CORRECCIÓN APLICADA: Convertir la fecha en texto español a fecha real
+    # Convertir la fecha en texto español a fecha real
     df["Día de tm_start_local_at"] = df["Día de tm_start_local_at"].apply(convertir_fecha_espanol)
 
     if df["Día de tm_start_local_at"].isna().all():
@@ -171,13 +159,11 @@ if uploaded_file is not None:
     st.write("**Desempeño:** % de veces que el agente ingresó un dato válido o el dato por defecto (111111111 / 11@gmail.com).")
     st.write("**Contactabilidad:** % de veces que obtuvimos un dato real al que podemos contactar.")
     
-    # Aplicar validaciones
     df["Email Contactable"] = df["User Email"].apply(es_email_contactable)
     df["Email Cumplimiento"] = df["User Email"].apply(es_email_cumplimiento)
     df["Teléfono Contactable"] = df["User Phone Number"].apply(es_telefono_contactable)
     df["Teléfono Cumplimiento"] = df["User Phone Number"].apply(es_telefono_cumplimiento)
     
-    # Agrupar datos por agente
     resumen_agentes = df.groupby("Service Agent").agg(
         Total_Casos=("id_reservation_id", "count"),
         Desempeño_Email=("Email Cumplimiento", "sum"),
@@ -186,21 +172,17 @@ if uploaded_file is not None:
         Contactables_Tel=("Teléfono Contactable", "sum")
     ).reset_index()
     
-    # Calcular porcentajes
     resumen_agentes["% Desempeño Email"] = (resumen_agentes["Desempeño_Email"] / resumen_agentes["Total_Casos"]) * 100
     resumen_agentes["% Contactabilidad Email"] = (resumen_agentes["Contactables_Email"] / resumen_agentes["Total_Casos"]) * 100
     resumen_agentes["% Desempeño Teléfono"] = (resumen_agentes["Desempeño_Tel"] / resumen_agentes["Total_Casos"]) * 100
     resumen_agentes["% Contactabilidad Teléfono"] = (resumen_agentes["Contactables_Tel"] / resumen_agentes["Total_Casos"]) * 100
     
-    # Crear una copia para visualizar bonito en Streamlit
     resumen_display = resumen_agentes.copy()
     for col in ["% Desempeño Email", "% Contactabilidad Email", "% Desempeño Teléfono", "% Contactabilidad Teléfono"]:
         resumen_display[col] = resumen_display[col].round(1).astype(str) + "%"
     
-    # Mostrar tabla de agentes
     st.dataframe(resumen_display, use_container_width=True)
 
-    # Botón de descarga para las analíticas de los agentes
     output_agentes = BytesIO()
     resumen_agentes.to_excel(output_agentes, index=False, engine='openpyxl')
     output_agentes.seek(0)
@@ -221,7 +203,6 @@ if uploaded_file is not None:
     df["Minutes Creation - Pickup"] = pd.to_numeric(df["Minutes Creation - Pickup"], errors="coerce")
     df["Monto a Reembolsar"] = df["Minutes Creation - Pickup"].apply(calcular_compensacion)
 
-    # Filtrar solo los que aplican para compensación
     df_compensaciones = df[df["Monto a Reembolsar"] > 0].copy()
 
     if df_compensaciones.empty:
@@ -230,7 +211,6 @@ if uploaded_file is not None:
 
     st.subheader("📊 Registros procesados para Compensación")
     
-    # Limpiar columnas de validación que ya no necesitamos ver
     cols_a_borrar = ["Email Contactable", "Email Cumplimiento", "Teléfono Contactable", "Teléfono Cumplimiento"]
     df_compensaciones = df_compensaciones.drop(columns=cols_a_borrar)
     
@@ -250,6 +230,26 @@ if uploaded_file is not None:
     # ------------------------------
     # CREAR EXCEL ESTILIZADO CABIFY PARA COMPENSACIONES
     # ------------------------------
+    
+    # 1. Preparar el DataFrame exactamente como lo pidieron
+    columnas_excel = [
+        "Día de tm_start_local_at", 
+        "Segmento Tiempo en Losa", 
+        "End State", 
+        "id_reservation_id", 
+        "Service Channel", 
+        "Minutes Creation - Pickup", 
+        "User Fullname", 
+        "User Email", 
+        "User Phone Number", 
+        "Estado Pago", 
+        "Monto a Reembolsar"
+    ]
+    df_excel = df_compensaciones[columnas_excel].copy()
+    
+    # Renombrar "Día" por "Day" solo para el Excel
+    df_excel = df_excel.rename(columns={"Día de tm_start_local_at": "Day of tm_start_local_at"})
+
     output = BytesIO()
     wb = Workbook()
     ws = wb.active
@@ -268,7 +268,8 @@ if uploaded_file is not None:
     fill_9000 = PatternFill("solid", fgColor="E83C96")
     alt_fill = PatternFill("solid", fgColor="FAF8FE")
 
-    for r in dataframe_to_rows(df_compensaciones, index=False, header=True):
+    # Escribir el DataFrame filtrado al Excel
+    for r in dataframe_to_rows(df_excel, index=False, header=True):
         ws.append(r)
 
     for cell in ws[1]:
@@ -277,7 +278,11 @@ if uploaded_file is not None:
         cell.border = border
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    ws.auto_filter.ref = f"A1:{chr(64 + len(df_compensaciones.columns))}1"
+    ws.auto_filter.ref = f"A1:{chr(64 + len(df_excel.columns))}1"
+
+    # Estilos dinámicos basados en la nueva estructura de df_excel
+    col_idx_estado = df_excel.columns.get_loc("Estado Pago")
+    col_idx_monto = df_excel.columns.get_loc("Monto a Reembolsar")
 
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
         idx = row[0].row
@@ -286,26 +291,26 @@ if uploaded_file is not None:
             for cell in row:
                 cell.fill = alt_fill
 
-        estado = row[df_compensaciones.columns.get_loc("Estado Pago")].value
+        estado = row[col_idx_estado].value
         if estado == "No Pagado":
-            row[df_compensaciones.columns.get_loc("Estado Pago")].fill = color_no_pagado
+            row[col_idx_estado].fill = color_no_pagado
         else:
-            row[df_compensaciones.columns.get_loc("Estado Pago")].fill = color_pagado
+            row[col_idx_estado].fill = color_pagado
 
-        monto = float(row[df_compensaciones.columns.get_loc("Monto a Reembolsar")].value)
+        monto = float(row[col_idx_monto].value)
         if monto == 3000:
-            row[df_compensaciones.columns.get_loc("Monto a Reembolsar")].fill = fill_3000
+            row[col_idx_monto].fill = fill_3000
         elif monto == 6000:
-            row[df_compensaciones.columns.get_loc("Monto a Reembolsar")].fill = fill_6000
+            row[col_idx_monto].fill = fill_6000
         elif monto == 9000:
-            row[df_compensaciones.columns.get_loc("Monto a Reembolsar")].fill = fill_9000
+            row[col_idx_monto].fill = fill_9000
 
         for cell in row:
             cell.border = border
             cell.alignment = Alignment(vertical="center")
 
     dv = DataValidation(type="list", formula1='"Pagado,No Pagado"', allow_blank=False)
-    col_estado_pago = df_compensaciones.columns.get_loc("Estado Pago") + 1
+    col_estado_pago = col_idx_estado + 1
     col_letter = chr(64 + col_estado_pago)
     dv.add(f"{col_letter}2:{col_letter}1048576")
     ws.add_data_validation(dv)

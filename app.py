@@ -352,14 +352,22 @@ if uploaded_file is not None:
                 col1, col2 = st.columns([1, 1.5])
                 
                 with col1:
-                    st.write("**Datos del Ticket (Copia campo por campo):**")
+                    st.write("**Datos del Ticket (Copia solo el valor exacto):**")
                     
-                    # Cada campo en su propio bloque con botón de copiar independiente
-                    st.code("Motivo: Compensación por tu experiencia reciente con Cabify", language="text")
-                    st.code(f"Email Solicitante: {row['User Email']}", language="text")
-                    st.code("Motivo de Contacto: Tag 060134 (Retraso en Reserva)", language="text")
-                    st.code("Descuentos: Chile -> Disculpas", language="text")
-                    st.code("Macro: Compensación proactiva espera en losa", language="text")
+                    st.markdown("**Motivo:**")
+                    st.code("Compensación por tu experiencia reciente con Cabify", language="text")
+                    
+                    st.markdown("**Email Solicitante:**")
+                    st.code(row['User Email'], language="text")
+                    
+                    st.markdown("**Motivo de Contacto:**")
+                    st.code("Tag 060134 (Retraso en Reserva)", language="text")
+                    
+                    st.markdown("**Descuentos:**")
+                    st.code("Chile -> Disculpas", language="text")
+                    
+                    st.markdown("**Macro:**")
+                    st.code("Compensación proactiva espera en losa", language="text")
 
                 with col2:
                     st.write("**Mensaje a enviar (Selecciona con el ratón y copia para mantener los enlaces activos):**")

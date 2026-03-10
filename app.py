@@ -32,7 +32,7 @@ def calcular_compensacion(minutos):
         return 0
 
 # ------------------------------
-# Función para arreglar fechas en Español
+# Función para arreglar fechas
 # ------------------------------
 MESES_ES_EN = {
     'enero': 'january', 'febrero': 'february', 'marzo': 'march',
@@ -54,7 +54,8 @@ def convertir_fecha_espanol(fecha_str):
             break
             
     try:
-        return pd.to_datetime(s).date()
+        # Usamos dayfirst=True por si viene en formato DD/MM/YYYY
+        return pd.to_datetime(s, dayfirst=True).date()
     except:
         return pd.NaT
 
@@ -100,7 +101,8 @@ uploaded_file = st.file_uploader("📤 Sube tu archivo CSV", type=["csv"])
 if uploaded_file is not None:
 
     try:
-        df = pd.read_csv(uploaded_file, dtype=str, sep=';', on_bad_lines='skip')
+        # Lectura inicial robusta
+        df_raw = pd.read_csv(uploaded_file, dtype=str, sep=';', on_bad_lines='skip')
         st.success("Archivo cargado correctamente 🎉 (Las filas con errores de formato fueron omitidas)")
     except Exception as e:
         st.error(f"❌ Error al leer el CSV: {e}")
@@ -119,52 +121,35 @@ if uploaded_file is not None:
         "Service Agent"
     ]
 
-    faltantes = [c for c in columnas if c not in df.columns]
+    faltantes = [c for c in columnas if c not in df_raw.columns]
     if faltantes:
         st.error(f"❌ Faltan columnas requeridas en tu CSV: {faltantes}")
         st.stop()
 
-    df = df[columnas].copy()
+    df = df_raw[columnas].copy()
 
     # Convertir la fecha en texto español a fecha real
     df["Día de tm_start_local_at"] = df["Día de tm_start_local_at"].apply(convertir_fecha_espanol)
 
-    if df["Día de tm_start_local_at"].isna().all():
-        st.error("❌ No hay fechas válidas. Revisa el formato de la columna 'Día de tm_start_local_at'.")
-        st.stop()
-
-    # Filtro de fechas
-    fecha_min = df["Día de tm_start_local_at"].min()
-    fecha_max = df["Día de tm_start_local_at"].max()
-
-    fecha_desde, fecha_hasta = st.date_input(
-        "📅 Selecciona rango de fechas:",
-        value=(fecha_min, fecha_max)
-    )
-
-    df = df[
-        (df["Día de tm_start_local_at"] >= fecha_desde) &
-        (df["Día de tm_start_local_at"] <= fecha_hasta)
-    ]
-
-    if df.empty:
-        st.warning("⚠️ No hay registros en ese rango.")
-        st.stop()
-
-    # ------------------------------
-    # ANALÍTICA DE AGENTES (Contactabilidad y Desempeño)
-    # ------------------------------
+    # ==========================================
+    # ANALÍTICA DE AGENTES (SOBRE LA BASE COMPLETA SIN FILTRAR FECHAS)
+    # ==========================================
     st.markdown("---")
-    st.subheader("🕵️‍♂️ Analítica de Agentes: Contactabilidad vs Desempeño")
-    st.write("**Desempeño:** % de veces que el agente ingresó un dato válido o el dato por defecto (111111111 / 11@gmail.com).")
-    st.write("**Contactabilidad:** % de veces que obtuvimos un dato real al que podemos contactar.")
+    st.subheader("🕵️‍♂️ Analítica de Agentes: Contactabilidad vs Desempeño (Base Completa)")
+    st.write("*(Esta sección analiza **todos los registros** de la base cargada, sin aplicar filtros de fecha ni montos de compensación).*")
     
-    df["Email Contactable"] = df["User Email"].apply(es_email_contactable)
-    df["Email Cumplimiento"] = df["User Email"].apply(es_email_cumplimiento)
-    df["Teléfono Contactable"] = df["User Phone Number"].apply(es_telefono_contactable)
-    df["Teléfono Cumplimiento"] = df["User Phone Number"].apply(es_telefono_cumplimiento)
+    # Trabajamos con una copia para no alterar el DataFrame original
+    df_agentes = df.copy()
     
-    resumen_agentes = df.groupby("Service Agent").agg(
+    # Manejar los Service Agent nulos o vacíos para que no se pierdan en el GroupBy
+    df_agentes["Service Agent"] = df_agentes["Service Agent"].fillna("Sin Agente / No Aplica")
+    
+    df_agentes["Email Contactable"] = df_agentes["User Email"].apply(es_email_contactable)
+    df_agentes["Email Cumplimiento"] = df_agentes["User Email"].apply(es_email_cumplimiento)
+    df_agentes["Teléfono Contactable"] = df_agentes["User Phone Number"].apply(es_telefono_contactable)
+    df_agentes["Teléfono Cumplimiento"] = df_agentes["User Phone Number"].apply(es_telefono_cumplimiento)
+    
+    resumen_agentes = df_agentes.groupby("Service Agent").agg(
         Total_Casos=("id_reservation_id", "count"),
         Desempeño_Email=("Email Cumplimiento", "sum"),
         Contactables_Email=("Email Contactable", "sum"),
@@ -176,6 +161,9 @@ if uploaded_file is not None:
     resumen_agentes["% Contactabilidad Email"] = (resumen_agentes["Contactables_Email"] / resumen_agentes["Total_Casos"]) * 100
     resumen_agentes["% Desempeño Teléfono"] = (resumen_agentes["Desempeño_Tel"] / resumen_agentes["Total_Casos"]) * 100
     resumen_agentes["% Contactabilidad Teléfono"] = (resumen_agentes["Contactables_Tel"] / resumen_agentes["Total_Casos"]) * 100
+    
+    # Ordenar por Total de Casos (descendente) para ver los agentes con más volumen arriba
+    resumen_agentes = resumen_agentes.sort_values("Total_Casos", ascending=False)
     
     resumen_display = resumen_agentes.copy()
     for col in ["% Desempeño Email", "% Contactabilidad Email", "% Desempeño Teléfono", "% Contactabilidad Teléfono"]:
@@ -196,24 +184,49 @@ if uploaded_file is not None:
     
     st.markdown("---")
 
-    # ------------------------------
-    # SECCIÓN DE COMPENSACIONES
-    # ------------------------------
-    df["Estado Pago"] = "No Pagado"
-    df["Minutes Creation - Pickup"] = pd.to_numeric(df["Minutes Creation - Pickup"], errors="coerce")
-    df["Monto a Reembolsar"] = df["Minutes Creation - Pickup"].apply(calcular_compensacion)
+    # ==========================================
+    # FILTRO DE FECHAS (SÓLO APLICA PARA COMPENSACIONES)
+    # ==========================================
+    # Eliminar NaT de las fechas solo para la lógica de compensaciones
+    df_fechas_validas = df.dropna(subset=["Día de tm_start_local_at"]).copy()
+    
+    if df_fechas_validas.empty:
+        st.error("❌ No hay fechas válidas para continuar con el cálculo de compensaciones. Revisa el formato de la columna 'Día de tm_start_local_at'.")
+        st.stop()
 
-    df_compensaciones = df[df["Monto a Reembolsar"] > 0].copy()
+    fecha_min = df_fechas_validas["Día de tm_start_local_at"].min()
+    fecha_max = df_fechas_validas["Día de tm_start_local_at"].max()
+
+    fecha_desde, fecha_hasta = st.date_input(
+        "📅 Selecciona rango de fechas para evaluar Compensaciones:",
+        value=(fecha_min, fecha_max)
+    )
+
+    df_comp_filtrado = df_fechas_validas[
+        (df_fechas_validas["Día de tm_start_local_at"] >= fecha_desde) &
+        (df_fechas_validas["Día de tm_start_local_at"] <= fecha_hasta)
+    ].copy()
+
+    if df_comp_filtrado.empty:
+        st.warning("⚠️ No hay registros en ese rango de fechas para procesar compensaciones.")
+        st.stop()
+
+    # ==========================================
+    # SECCIÓN DE COMPENSACIONES
+    # ==========================================
+    df_comp_filtrado["Estado Pago"] = "No Pagado"
+    df_comp_filtrado["Minutes Creation - Pickup"] = pd.to_numeric(df_comp_filtrado["Minutes Creation - Pickup"], errors="coerce")
+    df_comp_filtrado["Monto a Reembolsar"] = df_comp_filtrado["Minutes Creation - Pickup"].apply(calcular_compensacion)
+
+    df_compensaciones = df_comp_filtrado[df_comp_filtrado["Monto a Reembolsar"] > 0].copy()
 
     if df_compensaciones.empty:
         st.warning("⚠️ No hay compensaciones > 0 para mostrar en este rango.")
         st.stop()
 
-    st.subheader("📊 Registros procesados para Compensación")
+    st.subheader("📊 Registros procesados para Compensación (Losa)")
     
-    cols_a_borrar = ["Email Cumplimiento", "Teléfono Contactable", "Teléfono Cumplimiento"]
-    df_compensaciones_vista = df_compensaciones.drop(columns=cols_a_borrar + ["Email Contactable"])
-    
+    df_compensaciones_vista = df_compensaciones.copy()
     st.dataframe(df_compensaciones_vista, use_container_width=True)
 
     st.subheader("📈 Resumen de compensaciones")
@@ -227,9 +240,9 @@ if uploaded_file is not None:
     st.write(f"- **Total de casos:** {len(df_compensaciones)}")
     st.write(f"- **Total en dinero:** ${df_compensaciones['Monto a Reembolsar'].sum():,}")
 
-    # ------------------------------
+    # ==========================================
     # CREAR EXCEL ESTILIZADO CABIFY PARA COMPENSACIONES
-    # ------------------------------
+    # ==========================================
     columnas_excel = [
         "Día de tm_start_local_at", 
         "Segmento Tiempo en Losa", 
@@ -319,12 +332,15 @@ if uploaded_file is not None:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    # ------------------------------
+    # ==========================================
     # PLANTILLAS PARA ZENDESK
-    # ------------------------------
+    # ==========================================
     st.markdown("---")
     st.subheader("📝 Plantillas para Zendesk")
     st.write("Copia los campos para crear los tickets. Solo se muestran usuarios con correos válidos y se excluyen dominios corporativos (@cabify.com).")
+    
+    # Recalcular las banderas de contacto solo para el grupo de compensaciones para usarlas en Zendesk
+    df_compensaciones["Email Contactable"] = df_compensaciones["User Email"].apply(es_email_contactable)
     
     df_zendesk = df_compensaciones[
         (df_compensaciones["Email Contactable"] == True) & 
@@ -348,33 +364,24 @@ if uploaded_file is not None:
             for idx, row in df_zendesk.iterrows():
                 st.write(f"### 🎫 Ticket para: {row['User Fullname']} ({row['Monto a Reembolsar']} CLP)")
                 
-                # Crear dos columnas (1 para campos, 2 para el mensaje)
                 col1, col2 = st.columns([1, 1.5])
                 
                 with col1:
                     st.write("**Datos del Ticket (Copia solo el valor exacto):**")
-                    
                     st.markdown("**Motivo:**")
                     st.code("Compensación por tu experiencia reciente con Cabify", language="text")
-                    
                     st.markdown("**Email Solicitante:**")
                     st.code(row['User Email'], language="text")
-                    
                     st.markdown("**Motivo de Contacto:**")
                     st.code("Tag 060134 (Retraso en Reserva)", language="text")
-                    
                     st.markdown("**Descuentos:**")
                     st.code("Chile -> Disculpas", language="text")
-                    
                     st.markdown("**Macro:**")
                     st.code("Compensación proactiva espera en losa", language="text")
 
                 with col2:
                     st.write("**Mensaje a enviar (Selecciona con el ratón y copia para mantener los enlaces activos):**")
-                    
-                    # Usamos Markdown para respetar los enlaces HTML y los saltos de línea
-                    mensaje_correo = f"""
-Hola {row['Primer Nombre']},
+                    mensaje_correo = f'''Hola {row['Primer Nombre']},
 
 En Cabify, valoramos tu tiempo y sabemos que cada minuto cuenta.
 
@@ -393,8 +400,7 @@ Una vez que nos confirmes o crees tu cuenta, cargaremos tu saldo en menos de 24 
 Estamos atentos para asistirte con la carga del saldo. ¡Esperamos verte pronto a bordo, con la comodidad y rapidez que mereces!
 
 Saludos cordiales,  
-El equipo de Cabify
-"""
+El equipo de Cabify'''
                     st.info(mensaje_correo)
                 
                 st.markdown("---")
